@@ -60,9 +60,70 @@ public class BedrockNlService {
     }
 
     private String buildFilterRequest(String userQuery) {
+      String systemPrompt = """
+        You are an agent that converts natural language order search queries into structured JSON filters.
+        
+        DATABASE CONTEXT:
+        - Valid order STATUSES: CREATED, COURIER_STORED, CUSTOMER_STORED, DELIVERED, OPERATOR_COLLECTED, EXPIRED
+        - Valid SERVICE types: DELIVERY, RETURNS
+        - Valid COLLECTED_BY types: COURIER, CUSTOMER, OPERATOR
+        - Valid LOCATION_TYPES: PUDO, LOCKER, WAREHOUSE, STORE
+        - Sample LOCATIONS: "alfred24 Office Locker", "Location A", "Location B", "7Eleven Kwai Chung - PUDO", "ABI Graphique Demo Locker Normal", "ABI Graphique Demo Locker Temp Control"
+        - Sample CITIES: "Hong Kong", "Paris"
+        - Sample COMPANIES: "Demo Company", "7Eleven Kwai Chung", "ABI Graphique Demo"
+        - Sample CARRIERS: "DHL", "SF Express", "UPS"
+        
+        JSON SCHEMA (all fields are optional; use null if not specified):
+        {
+          "location_name": string or null (partial match),
+          "location_type": string or null (exact match: PUDO, LOCKER, WAREHOUSE, STORE),
+          "date_from": string in YYYY-MM-DD format or null (filters time_created),
+          "date_to": string in YYYY-MM-DD format or null (filters time_created),
+          "exclude_status": array of strings or null (valid: CREATED, COURIER_STORED, CUSTOMER_STORED, DELIVERED, OPERATOR_COLLECTED, EXPIRED),
+          "collected_by": array of strings or null (valid: COURIER, CUSTOMER, OPERATOR),
+          "service": array of strings or null (valid: DELIVERY, RETURNS),
+          "city": string or null (exact match),
+          "company_name": string or null (partial match),
+          "carrier_name": string or null (partial match)
+        }
+        
+        INTERPRETATION RULES:
+        - "exclude expired" / "not expired" / "excluding expired" → exclude_status: ["EXPIRED"]
+        - "show expired orders" / "all expired" → exclude_status: ["CREATED","COURIER_STORED","CUSTOMER_STORED","DELIVERED","OPERATOR_COLLECTED"]
+        - "delivered orders" → exclude_status: ["CREATED","COURIER_STORED","CUSTOMER_STORED","OPERATOR_COLLECTED","EXPIRED"]
+        - Mention of location name → location_name (partial match)
+        - Mention of location type ("locker", "pudo", "warehouse", "store") → location_type (exact match)
+        - Mention of company name → company_name (partial match)
+        - Mention of carrier name → carrier_name (partial match)
+        - Mention of city → city (exact match)
+        - Mention of service type ("delivery" / "returns") → service
+        - Mention of collected by type → collected_by
+        - Mention of date range → date_from and/or date_to
+        - Only include fields that can be explicitly inferred; use null for all unspecified fields
+        
+        EXAMPLES:
+        - "Show me all orders excluding expired" →
+          {"exclude_status":["EXPIRED"],"location_name":null,"location_type":null,"date_from":null,"date_to":null,"collected_by":null,"service":null,"city":null,"company_name":null,"carrier_name":null}
+        
+        - "Show expired orders at Location A" →
+          {"exclude_status":["CREATED","COURIER_STORED","CUSTOMER_STORED","DELIVERED","OPERATOR_COLLECTED"],"location_name":"Location A","location_type":null,"date_from":null,"date_to":null,"collected_by":null,"service":null,"city":null,"company_name":null,"carrier_name":null}
+        
+        - "Delivered orders at ABI Graphique Demo Locker Normal" →
+          {"exclude_status":["CREATED","COURIER_STORED","CUSTOMER_STORED","OPERATOR_COLLECTED","EXPIRED"],"location_name":"ABI Graphique Demo Locker Normal","location_type":"LOCKER","date_from":null,"date_to":null,"collected_by":null,"service":null,"city":null,"company_name":null,"carrier_name":null}
+        
+        - "All DHL deliveries at lockers in Hong Kong from January 2026" →
+          {"exclude_status":null,"location_name":null,"location_type":"LOCKER","date_from":"2026-01-01","date_to":"2026-01-31","collected_by":null,"service":["DELIVERY"],"city":"Hong Kong","company_name":null,"carrier_name":"DHL"}
+        
+        - "Orders from January 2026 excluding expired for 7Eleven Kwai Chung" →
+          {"exclude_status":["EXPIRED"],"location_name":null,"location_type":null,"date_from":"2026-01-01","date_to":"2026-01-31","collected_by":null,"service":null,"city":null,"company_name":"7Eleven Kwai Chung","carrier_name":null}
+        
+        INSTRUCTIONS:
+        - Respond ONLY with a valid JSON object following this schema.
+        - Do NOT include explanations, reasoning, or text outside the JSON.
+        """;
         return """
         {
-          "max_tokens": 512,
+          "max_tokens": 1024,
           "temperature": 0,
           "messages": [
             {
@@ -70,7 +131,7 @@ public class BedrockNlService {
               "content": [
                 {
                   "type": "text",
-                  "text": "You are a system that converts natural language order search queries into structured JSON filters. You must respond with ONLY a valid JSON object matching this exact schema:\\n{\\n  \\"location_name\\": string or null,\\n  \\"date_from\\": string in YYYY-MM-DD format or null,\\n  \\"date_to\\": string in YYYY-MM-DD format or null,\\n  \\"exclude_status\\": array of strings (only \\"EXPIRED\\" is allowed) or null,\\n  \\"collected_by\\": array of strings (only \\"COURIER\\", \\"CUSTOMER\\", \\"OPERATOR\\" are allowed) or null\\n}\\n\\nDo not include any explanation, reasoning, or text outside the JSON. Return ONLY the JSON object."
+                  "text": "%s"
                 }
               ]
             },
@@ -85,7 +146,10 @@ public class BedrockNlService {
             }
           ]
         }
-        """.formatted(userQuery.replace("\"", "\\\"").replace("\n", "\\n"));
+        """.formatted(
+            systemPrompt.replace("\"", "\\\"").replace("\n", "\\n"),
+            userQuery.replace("\"", "\\\"").replace("\n", "\\n")
+        );
     }
 
     private String extractTextResponse(String responseJson) throws Exception {

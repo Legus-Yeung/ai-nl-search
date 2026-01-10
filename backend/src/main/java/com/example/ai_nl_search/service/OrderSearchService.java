@@ -54,6 +54,11 @@ public class OrderSearchService {
             sql.append(" AND l.name LIKE ?");
             params.add("%" + filter.getLocationName().trim() + "%");
         }
+        
+        if (filter.getLocationType() != null && !filter.getLocationType().trim().isEmpty()) {
+            sql.append(" AND l.location_type = ?");
+            params.add(filter.getLocationType().trim());
+        }
 
         if (filter.getDateFrom() != null && !filter.getDateFrom().trim().isEmpty()) {
             sql.append(" AND DATE(o.time_created) >= ?");
@@ -73,6 +78,31 @@ public class OrderSearchService {
                 params.add(filter.getExcludeStatus().get(i));
             }
             sql.append(")");
+        }
+        
+        if (filter.getService() != null && !filter.getService().isEmpty()) {
+            sql.append(" AND o.service IN (");
+            for (int i = 0; i < filter.getService().size(); i++) {
+                if (i > 0) sql.append(", ");
+                sql.append("?");
+                params.add(filter.getService().get(i));
+            }
+            sql.append(")");
+        }
+        
+        if (filter.getCity() != null && !filter.getCity().trim().isEmpty()) {
+            sql.append(" AND l.city = ?");
+            params.add(filter.getCity().trim());
+        }
+        
+        if (filter.getCompanyName() != null && !filter.getCompanyName().trim().isEmpty()) {
+            sql.append(" AND c.name LIKE ?");
+            params.add("%" + filter.getCompanyName().trim() + "%");
+        }
+        
+        if (filter.getCarrierName() != null && !filter.getCarrierName().trim().isEmpty()) {
+            sql.append(" AND car.name LIKE ?");
+            params.add("%" + filter.getCarrierName().trim() + "%");
         }
 
         if (filter.getCollectedBy() != null && !filter.getCollectedBy().isEmpty()) {

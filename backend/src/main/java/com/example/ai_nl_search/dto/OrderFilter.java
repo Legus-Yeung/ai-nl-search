@@ -8,6 +8,9 @@ public class OrderFilter {
     @JsonProperty("location_name")
     private String locationName;
     
+    @JsonProperty("location_type")
+    private String locationType;
+    
     @JsonProperty("date_from")
     private String dateFrom;
     
@@ -19,6 +22,18 @@ public class OrderFilter {
     
     @JsonProperty("collected_by")
     private List<String> collectedBy;
+    
+    @JsonProperty("service")
+    private List<String> service;
+    
+    @JsonProperty("city")
+    private String city;
+    
+    @JsonProperty("company_name")
+    private String companyName;
+    
+    @JsonProperty("carrier_name")
+    private String carrierName;
 
     public String getLocationName() {
         return locationName;
@@ -26,6 +41,14 @@ public class OrderFilter {
 
     public void setLocationName(String locationName) {
         this.locationName = locationName;
+    }
+    
+    public String getLocationType() {
+        return locationType;
+    }
+
+    public void setLocationType(String locationType) {
+        this.locationType = locationType;
     }
 
     public String getDateFrom() {
@@ -50,6 +73,38 @@ public class OrderFilter {
 
     public void setExcludeStatus(List<String> excludeStatus) {
         this.excludeStatus = excludeStatus;
+    }
+    
+    public List<String> getService() {
+        return service;
+    }
+
+    public void setService(List<String> service) {
+        this.service = service;
+    }
+    
+    public String getCity() {
+        return city;
+    }
+
+    public void setCity(String city) {
+        this.city = city;
+    }
+    
+    public String getCompanyName() {
+        return companyName;
+    }
+
+    public void setCompanyName(String companyName) {
+        this.companyName = companyName;
+    }
+    
+    public String getCarrierName() {
+        return carrierName;
+    }
+
+    public void setCarrierName(String carrierName) {
+        this.carrierName = carrierName;
     }
 
     public List<String> getCollectedBy() {
