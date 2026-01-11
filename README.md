@@ -185,19 +185,15 @@ sequenceDiagram
    - Pro: Simplifies "show X" queries (exclude all except X)
    - Con: More complex for "show X and Y" (exclude all except X,Y)
 
-2. **Regex JSON extraction**:
-   - Pro: Handles malformed Bedrock responses (code blocks, extra text)
-   - Con: Less robust than full JSON parser; may fail on nested structures
-
-3. **Assumption tracking**:
+2. **Assumption tracking**:
    - Pro: Transparent to users about defaults (date field, status interpretation)
    - Con: Additional complexity in controller validation logic
 
-4. **Follow-up message generation**:
+3. **Follow-up message generation**:
    - Pro: Improves UX by explaining assumptions and suggesting alternatives
    - Con: Additional Bedrock API call increases latency and cost
 
-5. **Whitelist validation**:
+4. **Whitelist validation**:
    - Pro: Prevents injection, provides clear error messages
    - Con: Requires maintenance when schema changes
 
