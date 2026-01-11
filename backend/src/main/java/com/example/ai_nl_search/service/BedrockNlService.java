@@ -56,7 +56,13 @@ public class BedrockNlService {
             return filter;
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to interpret natural language query", e);
+            String errorMsg = e.getMessage();
+            if (errorMsg != null && (errorMsg.contains("Unable to load credentials") || 
+                                    errorMsg.contains("No credentials") ||
+                                    errorMsg.contains("credentials"))) {
+                throw new RuntimeException("AWS credentials not configured. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables.", e);
+            }
+            throw new RuntimeException("Failed to interpret natural language query: " + e.getMessage(), e);
         }
     }
 

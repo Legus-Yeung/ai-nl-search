@@ -74,16 +74,30 @@ public class NlSearchController {
             
         } catch (RuntimeException e) {
             String errorMessage = e.getMessage();
+            if (errorMessage != null && errorMessage.contains("AWS credentials not configured")) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", 
+                        "AWS credentials are not configured. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables."));
+            }
             if (errorMessage != null && errorMessage.contains("Failed to interpret")) {
+                System.err.println("Bedrock interpretation error: " + e.getMessage());
+                if (e.getCause() != null) {
+                    System.err.println("Cause: " + e.getCause().getMessage());
+                    e.getCause().printStackTrace();
+                }
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", 
                         "Unable to understand your query. Please try rephrasing. " +
                         "Example: 'Show me all delivered orders from January 2026'"));
             }
             
+            System.err.println("Runtime error: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("message", "An error occurred while processing your search. Please try again."));
         } catch (Exception e) {
+            System.err.println("Unexpected error: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("message", "An unexpected error occurred. Please try again later."));
         }
@@ -183,7 +197,6 @@ public class NlSearchController {
             filter.setDateField("CREATED");
         }
         
-        // Track assumption when date is provided but user didn't explicitly specify which date field
         if (filter.getDateFrom() != null || filter.getDateTo() != null) {
             String dateField = filter.getDateField();
             if (dateField == null || dateField.isEmpty()) {
@@ -191,14 +204,12 @@ public class NlSearchController {
                 filter.setDateField("CREATED");
             }
             
-            // Check if user explicitly mentioned date field keywords in their query
             String queryLower = originalQuery.toLowerCase();
             boolean userSpecifiedDateField = queryLower.contains("created") || 
                                             queryLower.contains("creation") ||
                                             queryLower.contains("stored") ||
                                             queryLower.contains("collected");
             
-            // If date field is CREATED (default) and user didn't explicitly mention it, track as assumption
             if (dateField.equals("CREATED") && !userSpecifiedDateField) {
                 assumptions.add("Date filter defaulted to order creation time. " +
                     "To filter by stored or collected time, specify 'stored' or 'collected' in your query.");

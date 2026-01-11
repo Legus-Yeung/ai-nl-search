@@ -23,7 +23,7 @@ app.controller("SearchController", function ($scope, $http) {
     var searchQuery = $scope.query.trim();
     $scope.lastSearchQuery = searchQuery;
 
-    $http.post("http://localhost:8080/api/nl-search", {
+    $http.post("/api/nl-search", {
       query: searchQuery
     }).then(function (response) {
       $scope.results = response.data.results || [];
