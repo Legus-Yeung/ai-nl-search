@@ -44,11 +44,11 @@ app.controller("SearchController", function ($scope, $http) {
       return;
     }
 
+    var searchQuery = $scope.query.trim();
     $scope.loading = true;
     $scope.error = null;
     $scope.warnings = [];
     $scope.followUp = null;
-    var searchQuery = $scope.query.trim();
     $scope.lastSearchQuery = searchQuery;
 
     $http.post("/api/nl-search", {

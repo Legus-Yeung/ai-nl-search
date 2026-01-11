@@ -21,9 +21,10 @@
     placeholder="e.g. Show me all parcels delivered to Location A since January"
     style="width: 400px;"
     ng-keypress="$event.keyCode === 13 && search()"
+    ng-disabled="loading"
   />
 
-  <button ng-click="search()">Search</button>
+  <button ng-click="search()" ng-disabled="loading">Search</button>
   
   <p ng-if="error" style="color: red; margin-top: 10px;">{{ error }}</p>
 
