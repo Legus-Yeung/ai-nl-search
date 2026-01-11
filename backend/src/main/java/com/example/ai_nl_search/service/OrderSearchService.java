@@ -6,9 +6,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class OrderSearchService {
@@ -18,6 +20,30 @@ public class OrderSearchService {
     @Autowired
     public OrderSearchService(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+    }
+
+    private void addWordBasedMatch(StringBuilder sql, List<Object> params, String column, String searchTerm) {
+        if (searchTerm == null || searchTerm.trim().isEmpty()) {
+            return;
+        }
+        
+        List<String> words = Arrays.stream(searchTerm.trim().split("\\s+"))
+            .filter(word -> !word.isEmpty())
+            .collect(Collectors.toList());
+        
+        if (words.isEmpty()) {
+            return;
+        }
+        
+        sql.append(" AND (");
+        for (int i = 0; i < words.size(); i++) {
+            if (i > 0) {
+                sql.append(" AND ");
+            }
+            sql.append("LOWER(").append(column).append(") LIKE LOWER(?)");
+            params.add("%" + words.get(i) + "%");
+        }
+        sql.append(")");
     }
 
     public List<Map<String, Object>> search(OrderFilter filter) {
@@ -51,8 +77,7 @@ public class OrderSearchService {
         List<Object> params = new ArrayList<>();
 
         if (filter.getLocationName() != null && !filter.getLocationName().trim().isEmpty()) {
-            sql.append(" AND l.name LIKE ?");
-            params.add("%" + filter.getLocationName().trim() + "%");
+            addWordBasedMatch(sql, params, "l.name", filter.getLocationName());
         }
         
         if (filter.getLocationType() != null && !filter.getLocationType().trim().isEmpty()) {
@@ -110,18 +135,15 @@ public class OrderSearchService {
         }
         
         if (filter.getCity() != null && !filter.getCity().trim().isEmpty()) {
-            sql.append(" AND l.city = ?");
-            params.add(filter.getCity().trim());
+            addWordBasedMatch(sql, params, "l.city", filter.getCity());
         }
         
         if (filter.getCompanyName() != null && !filter.getCompanyName().trim().isEmpty()) {
-            sql.append(" AND c.name LIKE ?");
-            params.add("%" + filter.getCompanyName().trim() + "%");
+            addWordBasedMatch(sql, params, "c.name", filter.getCompanyName());
         }
         
         if (filter.getCarrierName() != null && !filter.getCarrierName().trim().isEmpty()) {
-            sql.append(" AND car.name LIKE ?");
-            params.add("%" + filter.getCarrierName().trim() + "%");
+            addWordBasedMatch(sql, params, "car.name", filter.getCarrierName());
         }
 
         if (filter.getCollectedBy() != null && !filter.getCollectedBy().isEmpty()) {
@@ -135,8 +157,21 @@ public class OrderSearchService {
         }
 
         if (filter.getExcludeLocationName() != null && !filter.getExcludeLocationName().trim().isEmpty()) {
-            sql.append(" AND l.name NOT LIKE ?");
-            params.add("%" + filter.getExcludeLocationName().trim() + "%");
+            List<String> words = Arrays.stream(filter.getExcludeLocationName().trim().split("\\s+"))
+                .filter(word -> !word.isEmpty())
+                .collect(Collectors.toList());
+            
+            if (!words.isEmpty()) {
+                sql.append(" AND NOT (");
+                for (int i = 0; i < words.size(); i++) {
+                    if (i > 0) {
+                        sql.append(" OR ");
+                    }
+                    sql.append("LOWER(l.name) LIKE LOWER(?)");
+                    params.add("%" + words.get(i) + "%");
+                }
+                sql.append(")");
+            }
         }
         
         if (filter.getExcludeLocationType() != null && !filter.getExcludeLocationType().isEmpty()) {
@@ -150,18 +185,57 @@ public class OrderSearchService {
         }
         
         if (filter.getExcludeCity() != null && !filter.getExcludeCity().trim().isEmpty()) {
-            sql.append(" AND l.city != ?");
-            params.add(filter.getExcludeCity().trim());
+            List<String> words = Arrays.stream(filter.getExcludeCity().trim().split("\\s+"))
+                .filter(word -> !word.isEmpty())
+                .collect(Collectors.toList());
+            
+            if (!words.isEmpty()) {
+                sql.append(" AND NOT (");
+                for (int i = 0; i < words.size(); i++) {
+                    if (i > 0) {
+                        sql.append(" OR ");
+                    }
+                    sql.append("LOWER(l.city) LIKE LOWER(?)");
+                    params.add("%" + words.get(i) + "%");
+                }
+                sql.append(")");
+            }
         }
         
         if (filter.getExcludeCompanyName() != null && !filter.getExcludeCompanyName().trim().isEmpty()) {
-            sql.append(" AND c.name NOT LIKE ?");
-            params.add("%" + filter.getExcludeCompanyName().trim() + "%");
+            List<String> words = Arrays.stream(filter.getExcludeCompanyName().trim().split("\\s+"))
+                .filter(word -> !word.isEmpty())
+                .collect(Collectors.toList());
+            
+            if (!words.isEmpty()) {
+                sql.append(" AND NOT (");
+                for (int i = 0; i < words.size(); i++) {
+                    if (i > 0) {
+                        sql.append(" OR ");
+                    }
+                    sql.append("LOWER(c.name) LIKE LOWER(?)");
+                    params.add("%" + words.get(i) + "%");
+                }
+                sql.append(")");
+            }
         }
         
         if (filter.getExcludeCarrierName() != null && !filter.getExcludeCarrierName().trim().isEmpty()) {
-            sql.append(" AND (car.name IS NULL OR car.name NOT LIKE ?)");
-            params.add("%" + filter.getExcludeCarrierName().trim() + "%");
+            List<String> words = Arrays.stream(filter.getExcludeCarrierName().trim().split("\\s+"))
+                .filter(word -> !word.isEmpty())
+                .collect(Collectors.toList());
+            
+            if (!words.isEmpty()) {
+                sql.append(" AND (car.name IS NULL OR NOT (");
+                for (int i = 0; i < words.size(); i++) {
+                    if (i > 0) {
+                        sql.append(" OR ");
+                    }
+                    sql.append("LOWER(car.name) LIKE LOWER(?)");
+                    params.add("%" + words.get(i) + "%");
+                }
+                sql.append("))");
+            }
         }
         
         if (filter.getExcludeService() != null && !filter.getExcludeService().isEmpty()) {

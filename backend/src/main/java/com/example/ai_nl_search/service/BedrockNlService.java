@@ -98,7 +98,7 @@ public class BedrockNlService {
         - Valid COLLECTED_BY types: COURIER, CUSTOMER, OPERATOR
         - Valid LOCATION_TYPES: PUDO, LOCKER, WAREHOUSE, STORE
         - Valid FLAGS: FRAGILE, VIP, EXPIRED (flags are comma-separated in the database, e.g., "FRAGILE", "VIP", "EXPIRED,VIP")
-        - Sample LOCATIONS: "alfred24 Office Locker", "Location A", "Location B", "7Eleven Kwai Chung - PUDO", "ABI Graphique Demo Locker Normal", "ABI Graphique Demo Locker Temp Control"
+        - Sample LOCATIONS: "alfred24 Office Locker", "Location A", "Location B", "7Eleven Kwai Chung - PUDO", "ABI Graphique Demo Locker Normal"
         - Sample CITIES: "Hong Kong", "Paris"
         - Sample COMPANIES: "Demo Company", "7Eleven Kwai Chung", "ABI Graphique Demo"
         - Sample CARRIERS: "DHL", "SF Express", "UPS"
