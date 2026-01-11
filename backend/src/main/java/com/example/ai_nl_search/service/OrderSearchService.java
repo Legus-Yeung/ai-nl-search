@@ -60,13 +60,32 @@ public class OrderSearchService {
             params.add(filter.getLocationType().trim());
         }
 
+        String dateField = filter.getDateField();
+        if (dateField == null || dateField.trim().isEmpty()) {
+            dateField = "CREATED";
+        }
+        
+        String dateColumn;
+        switch (dateField.toUpperCase()) {
+            case "STORED":
+                dateColumn = "o.time_stored";
+                break;
+            case "COLLECTED":
+                dateColumn = "o.time_collected";
+                break;
+            case "CREATED":
+            default:
+                dateColumn = "o.time_created";
+                break;
+        }
+        
         if (filter.getDateFrom() != null && !filter.getDateFrom().trim().isEmpty()) {
-            sql.append(" AND DATE(o.time_created) >= ?");
+            sql.append(" AND DATE(").append(dateColumn).append(") >= ?");
             params.add(filter.getDateFrom().trim());
         }
 
         if (filter.getDateTo() != null && !filter.getDateTo().trim().isEmpty()) {
-            sql.append(" AND DATE(o.time_created) <= ?");
+            sql.append(" AND DATE(").append(dateColumn).append(") <= ?");
             params.add(filter.getDateTo().trim());
         }
 
@@ -111,6 +130,76 @@ public class OrderSearchService {
                 if (i > 0) sql.append(", ");
                 sql.append("?");
                 params.add(filter.getCollectedBy().get(i));
+            }
+            sql.append(")");
+        }
+
+        if (filter.getExcludeLocationName() != null && !filter.getExcludeLocationName().trim().isEmpty()) {
+            sql.append(" AND l.name NOT LIKE ?");
+            params.add("%" + filter.getExcludeLocationName().trim() + "%");
+        }
+        
+        if (filter.getExcludeLocationType() != null && !filter.getExcludeLocationType().isEmpty()) {
+            sql.append(" AND l.location_type NOT IN (");
+            for (int i = 0; i < filter.getExcludeLocationType().size(); i++) {
+                if (i > 0) sql.append(", ");
+                sql.append("?");
+                params.add(filter.getExcludeLocationType().get(i));
+            }
+            sql.append(")");
+        }
+        
+        if (filter.getExcludeCity() != null && !filter.getExcludeCity().trim().isEmpty()) {
+            sql.append(" AND l.city != ?");
+            params.add(filter.getExcludeCity().trim());
+        }
+        
+        if (filter.getExcludeCompanyName() != null && !filter.getExcludeCompanyName().trim().isEmpty()) {
+            sql.append(" AND c.name NOT LIKE ?");
+            params.add("%" + filter.getExcludeCompanyName().trim() + "%");
+        }
+        
+        if (filter.getExcludeCarrierName() != null && !filter.getExcludeCarrierName().trim().isEmpty()) {
+            sql.append(" AND (car.name IS NULL OR car.name NOT LIKE ?)");
+            params.add("%" + filter.getExcludeCarrierName().trim() + "%");
+        }
+        
+        if (filter.getExcludeService() != null && !filter.getExcludeService().isEmpty()) {
+            sql.append(" AND o.service NOT IN (");
+            for (int i = 0; i < filter.getExcludeService().size(); i++) {
+                if (i > 0) sql.append(", ");
+                sql.append("?");
+                params.add(filter.getExcludeService().get(i));
+            }
+            sql.append(")");
+        }
+        
+        if (filter.getExcludeCollectedBy() != null && !filter.getExcludeCollectedBy().isEmpty()) {
+            sql.append(" AND (o.collected_by_type IS NULL OR o.collected_by_type NOT IN (");
+            for (int i = 0; i < filter.getExcludeCollectedBy().size(); i++) {
+                if (i > 0) sql.append(", ");
+                sql.append("?");
+                params.add(filter.getExcludeCollectedBy().get(i));
+            }
+            sql.append("))");
+        }
+        
+        if (filter.getFlags() != null && !filter.getFlags().isEmpty()) {
+            sql.append(" AND (");
+            for (int i = 0; i < filter.getFlags().size(); i++) {
+                if (i > 0) sql.append(" OR ");
+                sql.append("FIND_IN_SET(?, o.flags) > 0");
+                params.add(filter.getFlags().get(i));
+            }
+            sql.append(")");
+        }
+        
+        if (filter.getExcludeFlags() != null && !filter.getExcludeFlags().isEmpty()) {
+            sql.append(" AND (o.flags IS NULL OR ");
+            for (int i = 0; i < filter.getExcludeFlags().size(); i++) {
+                if (i > 0) sql.append(" AND ");
+                sql.append("FIND_IN_SET(?, o.flags) = 0");
+                params.add(filter.getExcludeFlags().get(i));
             }
             sql.append(")");
         }

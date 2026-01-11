@@ -17,6 +17,9 @@ public class OrderFilter {
     @JsonProperty("date_to")
     private String dateTo;
     
+    @JsonProperty("date_field")
+    private String dateField;
+    
     @JsonProperty("exclude_status")
     private List<String> excludeStatus;
     
@@ -34,6 +37,33 @@ public class OrderFilter {
     
     @JsonProperty("carrier_name")
     private String carrierName;
+    
+    @JsonProperty("exclude_location_name")
+    private String excludeLocationName;
+    
+    @JsonProperty("exclude_location_type")
+    private List<String> excludeLocationType;
+    
+    @JsonProperty("exclude_city")
+    private String excludeCity;
+    
+    @JsonProperty("exclude_company_name")
+    private String excludeCompanyName;
+    
+    @JsonProperty("exclude_carrier_name")
+    private String excludeCarrierName;
+    
+    @JsonProperty("exclude_service")
+    private List<String> excludeService;
+    
+    @JsonProperty("exclude_collected_by")
+    private List<String> excludeCollectedBy;
+    
+    @JsonProperty("flags")
+    private List<String> flags;
+    
+    @JsonProperty("exclude_flags")
+    private List<String> excludeFlags;
 
     public String getLocationName() {
         return locationName;
@@ -113,5 +143,85 @@ public class OrderFilter {
 
     public void setCollectedBy(List<String> collectedBy) {
         this.collectedBy = collectedBy;
+    }
+    
+    public String getExcludeLocationName() {
+        return excludeLocationName;
+    }
+    
+    public void setExcludeLocationName(String excludeLocationName) {
+        this.excludeLocationName = excludeLocationName;
+    }
+    
+    public List<String> getExcludeLocationType() {
+        return excludeLocationType;
+    }
+    
+    public void setExcludeLocationType(List<String> excludeLocationType) {
+        this.excludeLocationType = excludeLocationType;
+    }
+    
+    public String getExcludeCity() {
+        return excludeCity;
+    }
+    
+    public void setExcludeCity(String excludeCity) {
+        this.excludeCity = excludeCity;
+    }
+    
+    public String getExcludeCompanyName() {
+        return excludeCompanyName;
+    }
+    
+    public void setExcludeCompanyName(String excludeCompanyName) {
+        this.excludeCompanyName = excludeCompanyName;
+    }
+    
+    public String getExcludeCarrierName() {
+        return excludeCarrierName;
+    }
+    
+    public void setExcludeCarrierName(String excludeCarrierName) {
+        this.excludeCarrierName = excludeCarrierName;
+    }
+    
+    public List<String> getExcludeService() {
+        return excludeService;
+    }
+    
+    public void setExcludeService(List<String> excludeService) {
+        this.excludeService = excludeService;
+    }
+    
+    public List<String> getExcludeCollectedBy() {
+        return excludeCollectedBy;
+    }
+    
+    public void setExcludeCollectedBy(List<String> excludeCollectedBy) {
+        this.excludeCollectedBy = excludeCollectedBy;
+    }
+    
+    public List<String> getFlags() {
+        return flags;
+    }
+    
+    public void setFlags(List<String> flags) {
+        this.flags = flags;
+    }
+    
+    public List<String> getExcludeFlags() {
+        return excludeFlags;
+    }
+    
+    public void setExcludeFlags(List<String> excludeFlags) {
+        this.excludeFlags = excludeFlags;
+    }
+    
+    public String getDateField() {
+        return dateField;
+    }
+    
+    public void setDateField(String dateField) {
+        this.dateField = dateField;
     }
 }
