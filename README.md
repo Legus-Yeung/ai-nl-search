@@ -1,7 +1,5 @@
 # AI-Powered Natural Language Search
 
-Natural language search application for orders using AWS Bedrock.
-
 ## System and API Design
 
 **Architecture**: Three-tier system with frontend (compatible with Angular 1.8.3), backend (Spring Boot), and database (MySQL) plus Dockerization and AWS Bedrock integration.
