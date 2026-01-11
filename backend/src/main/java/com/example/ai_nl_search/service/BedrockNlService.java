@@ -12,6 +12,8 @@ import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -62,13 +64,33 @@ public class BedrockNlService {
                                     errorMsg.contains("credentials"))) {
                 throw new RuntimeException("AWS credentials not configured. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables.", e);
             }
+            System.err.println("Error interpreting query: " + naturalLanguageQuery);
+            System.err.println("Error message: " + e.getMessage());
+            if (e.getCause() != null) {
+                System.err.println("Cause: " + e.getCause().getMessage());
+                e.getCause().printStackTrace();
+            } else {
+                e.printStackTrace();
+            }
             throw new RuntimeException("Failed to interpret natural language query: " + e.getMessage(), e);
         }
     }
 
     private String buildFilterRequest(String userQuery) {
+      LocalDate today = LocalDate.now();
+      String currentDate = today.format(DateTimeFormatter.ISO_LOCAL_DATE);
+      LocalDate lastWeekStart = today.minusDays(7);
+      LocalDate lastWeekEnd = today;
+      String lastWeekStartStr = lastWeekStart.format(DateTimeFormatter.ISO_LOCAL_DATE);
+      String lastWeekEndStr = lastWeekEnd.format(DateTimeFormatter.ISO_LOCAL_DATE);
+      
       String systemPrompt = """
         You are an agent that converts natural language order search queries into structured JSON filters.
+        
+        CURRENT DATE CONTEXT:
+        - Today's date: %s
+        - Last week (last 7 days): %s to %s
+        - Use these dates to calculate relative date expressions like "last week", "last month", "yesterday", etc.
         
         DATABASE CONTEXT:
         - Valid order STATUSES: CREATED, COURIER_STORED, CUSTOMER_STORED, DELIVERED, OPERATOR_COLLECTED, EXPIRED
@@ -108,7 +130,20 @@ public class BedrockNlService {
         INTERPRETATION RULES:
         - "exclude expired" / "not expired" / "excluding expired" → exclude_status: ["EXPIRED"]
         - "show expired orders" / "all expired" → exclude_status: ["CREATED","COURIER_STORED","CUSTOMER_STORED","DELIVERED","OPERATOR_COLLECTED"]
-        - "delivered orders" → exclude_status: ["CREATED","COURIER_STORED","CUSTOMER_STORED","OPERATOR_COLLECTED","EXPIRED"]
+        - "delivered orders" / "shipped orders" / "shipped" → exclude_status: ["CREATED","COURIER_STORED","CUSTOMER_STORED","OPERATOR_COLLECTED","EXPIRED"]
+          Note: "shipped" is interpreted as "delivered" status
+        - "operator-collected" / "operator collected" / "collected by operator" → can mean either:
+          * collected_by: ["OPERATOR"] (when used alone or with other collected_by types)
+          * OR status OPERATOR_COLLECTED (when used with status names like "delivered and operator-collected")
+        - "courier-collected" / "courier collected" / "collected by courier" → collected_by: ["COURIER"]
+        - "customer-collected" / "customer collected" / "collected by customer" → collected_by: ["CUSTOMER"]
+        - When combining status names with "and": "delivered and operator-collected" means include BOTH statuses (DELIVERED OR OPERATOR_COLLECTED)
+          * Set exclude_status to exclude all statuses EXCEPT the ones mentioned
+          * Example: "delivered and operator-collected" → exclude_status: ["CREATED","COURIER_STORED","CUSTOMER_STORED","EXPIRED"] (keeps DELIVERED and OPERATOR_COLLECTED)
+        - When combining status with collected_by: "delivered orders collected by operator" means status=DELIVERED AND collected_by=OPERATOR
+          * Set exclude_status to exclude all statuses except DELIVERED
+          * Set collected_by to ["OPERATOR"]
+          * Both conditions must be met (AND logic)
         - Mention of location name → location_name (partial match for inclusion)
         - "excluding [location name]" / "not [location name]" / "exclude [location name]" → exclude_location_name
         - Mention of location type ("locker", "pudo", "warehouse", "store") → location_type (exact match for inclusion)
@@ -124,14 +159,28 @@ public class BedrockNlService {
         - Mention of collected by type → collected_by (for inclusion)
         - "excluding [collected_by]" / "not [collected_by]" / "exclude [collected_by]" → exclude_collected_by
         - Mention of date range → date_from and/or date_to (convert relative dates to YYYY-MM-DD format)
-        - Relative dates: "today" → current date in YYYY-MM-DD, "last 7 days" → date_from = 7 days ago, "last month" → date_from = 1 month ago
-        - Date field keywords: "created" / "creation" → date_field: "CREATED", "stored" → date_field: "STORED", "collected" → date_field: "COLLECTED"
+        - Relative dates MUST be converted to absolute dates using the current date context:
+          * "today" → current date (%s)
+          * "yesterday" → current date minus 1 day
+          * "last week" → last 7 days: %s to %s (7 days before current date to current date)
+          * "last 7 days" → date_from = 7 days before current date, date_to = current date
+          * "last month" → first day of previous month to last day of previous month
+          * "this week" → Monday of current week to current date
+          * "this month" → first day of current month to current date
+        - Date field keywords: "created" / "creation" → date_field: "CREATED", "stored" → date_field: "STORED", "collected" → date_field: "COLLECTED", "delivered" → date_field: "STORED" (when status is DELIVERED)
         - If date field not specified, default to CREATED (time_created)
-        - Date examples: "from Jan 1 to today" → date_from: "2026-01-01", date_to: current date, "last 7 days" → date_from: 7 days ago, date_to: today
+        - IMPORTANT: When query mentions "delivered", set date_field to "STORED" since delivered orders have time_stored set (delivery happens when order is stored at location)
+        - Date examples: "from Jan 1 to today" → date_from: "2026-01-01", date_to: current date, "last 7 days" → date_from: 7 days before current date, date_to: current date
         - Mention of flags ("fragile", "vip", "expired") → flags (for inclusion, use uppercase: FRAGILE, VIP, EXPIRED)
         - "excluding [flag]" / "not [flag]" / "exclude [flag]" → exclude_flags (use uppercase: FRAGILE, VIP, EXPIRED)
         - Only include fields that can be explicitly inferred; use null for all unspecified fields
         - Inclusion and exclusion can be combined (e.g., "delivery orders excluding demo company" → service: ["DELIVERY"], exclude_company_name: "Demo Company")
+        - Multiple filter types can be combined with AND logic:
+          * Status filters (exclude_status) can be combined with collected_by, service, location, etc.
+          * IMPORTANT: When multiple status names are combined with "and" (e.g., "delivered and operator-collected"), it means include ANY of those statuses (OR logic for statuses)
+          * Example: "delivered and operator-collected" → exclude_status: ["CREATED","COURIER_STORED","CUSTOMER_STORED","EXPIRED"] (includes both DELIVERED and OPERATOR_COLLECTED)
+          * Example: "delivered orders collected by operator" → exclude_status excludes all except DELIVERED, AND collected_by: ["OPERATOR"] (AND logic between status and collected_by)
+          * When excluding a status that's already in exclude_status, it's already handled (e.g., if exclude_status already excludes EXPIRED, "exclude expired" is redundant)
         
         EXAMPLES:
         - "Show me all orders excluding expired" →
@@ -158,6 +207,9 @@ public class BedrockNlService {
         - "Orders collected today" →
           {"exclude_status":null,"location_name":null,"location_type":null,"date_from":null,"date_to":null,"date_field":"COLLECTED","collected_by":null,"service":null,"city":null,"company_name":null,"carrier_name":null,"exclude_location_name":null,"exclude_location_type":null,"exclude_city":null,"exclude_company_name":null,"exclude_carrier_name":null,"exclude_service":null,"exclude_collected_by":null,"flags":null,"exclude_flags":null}
         
+        - "Find parcels that were delivered to Location A last week" →
+          {"exclude_status":["CREATED","COURIER_STORED","CUSTOMER_STORED","OPERATOR_COLLECTED","EXPIRED"],"location_name":"Location A","location_type":null,"date_from":"%s","date_to":"%s","date_field":"STORED","collected_by":null,"service":null,"city":null,"company_name":null,"carrier_name":null,"exclude_location_name":null,"exclude_location_type":null,"exclude_city":null,"exclude_company_name":null,"exclude_carrier_name":null,"exclude_service":null,"exclude_collected_by":null,"flags":null,"exclude_flags":null}
+        
         - "Orders from January 2026 excluding expired for 7Eleven Kwai Chung" →
           {"exclude_status":["EXPIRED"],"location_name":null,"location_type":null,"date_from":"2026-01-01","date_to":"2026-01-31","date_field":"CREATED","collected_by":null,"service":null,"city":null,"company_name":"7Eleven Kwai Chung","carrier_name":null,"exclude_location_name":null,"exclude_location_type":null,"exclude_city":null,"exclude_company_name":null,"exclude_carrier_name":null,"exclude_service":null,"exclude_collected_by":null,"flags":null,"exclude_flags":null}
         
@@ -176,13 +228,43 @@ public class BedrockNlService {
         - "Orders excluding fragile items" →
           {"exclude_status":null,"location_name":null,"location_type":null,"date_from":null,"date_to":null,"date_field":null,"collected_by":null,"service":null,"city":null,"company_name":null,"carrier_name":null,"exclude_location_name":null,"exclude_location_type":null,"exclude_city":null,"exclude_company_name":null,"exclude_carrier_name":null,"exclude_service":null,"exclude_collected_by":null,"flags":null,"exclude_flags":["FRAGILE"]}
         
+        - "Show delivered and operator-collected orders, exclude expired" →
+          {"exclude_status":["CREATED","COURIER_STORED","CUSTOMER_STORED","EXPIRED"],"location_name":null,"location_type":null,"date_from":null,"date_to":null,"date_field":null,"collected_by":null,"service":null,"city":null,"company_name":null,"carrier_name":null,"exclude_location_name":null,"exclude_location_type":null,"exclude_city":null,"exclude_company_name":null,"exclude_carrier_name":null,"exclude_service":null,"exclude_collected_by":null,"flags":null,"exclude_flags":null}
+          Note: This includes orders with status DELIVERED OR OPERATOR_COLLECTED, excluding EXPIRED and all other statuses
+        
         INSTRUCTIONS:
         - Respond ONLY with a valid JSON object following this schema.
         - Do NOT include explanations, reasoning, or text outside the JSON.
+        
+        CRITICAL: Respond with ONLY the JSON object itself.
+        DO NOT include:
+        - Any reasoning, thinking, or analysis
+        - Any XML tags like <reasoning> or <thinking>
+        - Any explanations or step-by-step logic
+        - Any meta-commentary about your decision process
+        - Just output the final JSON object that should be parsed
+        
+        Example of CORRECT output:
+        {"exclude_status":["EXPIRED"],"location_name":null,"location_type":null,"date_from":null,"date_to":null,"date_field":null,"collected_by":null,"service":null,"city":null,"company_name":null,"carrier_name":null,"exclude_location_name":null,"exclude_location_type":null,"exclude_city":null,"exclude_company_name":null,"exclude_carrier_name":null,"exclude_service":null,"exclude_collected_by":null,"flags":null,"exclude_flags":null}
+        
+        Example of INCORRECT output (DO NOT DO THIS):
+        <reasoning>We need to exclude expired orders...</reasoning>{"exclude_status":["EXPIRED"],...}
         """;
+        
+        String formattedSystemPrompt = String.format(systemPrompt, 
+            currentDate,  
+            lastWeekStartStr,
+            lastWeekEndStr,
+            currentDate,
+            lastWeekStartStr,
+            lastWeekEndStr,
+            lastWeekStartStr,
+            lastWeekEndStr        
+        );
+        
         return """
         {
-          "max_tokens": 1024,
+          "max_tokens": 2046,
           "temperature": 0,
           "messages": [
             {
@@ -206,7 +288,7 @@ public class BedrockNlService {
           ]
         }
         """.formatted(
-            systemPrompt.replace("\"", "\\\"").replace("\n", "\\n"),
+            formattedSystemPrompt.replace("\"", "\\\"").replace("\n", "\\n"),
             userQuery.replace("\"", "\\\"").replace("\n", "\\n")
         );
     }
@@ -351,17 +433,28 @@ public class BedrockNlService {
             You must generate ONE of these 4 specific behaviors (choose the most appropriate):
             
             BEHAVIOR 1 - Suggest valid searches (when results are empty or query is ambiguous):
-            Format: "Did you mean [suggestion]?" or "No orders found. Try checking [location/company/carrier] names."
+            Format: "Did you mean [suggestion]?" or "No orders found. Try checking [location/company/carrier] names or different time periods."
             Use when: Results are empty and there might be similar valid values.
-            Example: "No orders found for 'Location X'. Did you mean Location A or Location B?"
+            IMPORTANT RULES FOR BEHAVIOR 1:
+            - If the query specifies a location/company/carrier that exists in the sample data, DO NOT suggest alternative locations/companies/carriers
+            - Instead, suggest trying a different time period (e.g., "last month", "this month", "all time")
+            - Only suggest location/company/carrier alternatives if the specified value is clearly invalid or not in the sample data
+            - Example (valid location, no results): "No orders found for 'Location A' last week. Try searching for a different time period like 'last month' or 'this month'."
+            - Example (invalid location): "No orders found for 'Location X'. Did you mean Location A or Location B?"
+            - If there are assumptions in the assumptions list AND results are empty, combine the assumption explanation with the suggestion
+            - Example (assumption + no results): "Interpreted 'shipped' as status DELIVERED. No orders found. Did you mean status DELIVERED?"
             Note: Use the valid values below to suggest realistic alternatives when appropriate.
             
             BEHAVIOR 2 - Notify user of assumption made:
             Format: Clearly state what assumption was made from query to filter.
-            Use when: An assumption was made (e.g., date field defaulted to CREATED).
-            Example: "Filtering by order creation time. To filter by stored or collected time, specify 'stored' or 'collected'."
-            Important: When a date assumption is mentioned in the assumptions list, you MUST generate a follow-up message explaining this to the user. 
-            Be specific: "Filtering by order creation date. To filter by stored or collected date, add 'stored' or 'collected' to your query."
+            Use when: An assumption was made (e.g., date field defaulted to CREATED, or "shipped" interpreted as "delivered").
+            Examples:
+            - Date assumption: "Filtering by order creation time. To filter by stored or collected time, specify 'stored' or 'collected'."
+            - Status assumption: "Interpreted 'shipped' as status DELIVERED. Did you mean status DELIVERED?"
+            Important: When ANY assumption is mentioned in the assumptions list, you MUST generate a follow-up message explaining this to the user.
+            - For date assumptions: "Filtering by order creation date. To filter by stored or collected date, add 'stored' or 'collected' to your query."
+            - For status assumptions: Mention the assumption AND suggest the correct status if applicable (e.g., "Interpreted 'shipped' as status DELIVERED. Did you mean status DELIVERED?")
+            - You can combine assumptions with suggestions: "Interpreted 'shipped' as status DELIVERED. Did you mean status DELIVERED?"
             
             BEHAVIOR 3 - No assumption made:
             Format: Return exactly "NO_ASSUMPTION_MADE"
@@ -378,8 +471,9 @@ public class BedrockNlService {
             - For BEHAVIOR 3, return exactly "NO_ASSUMPTION_MADE" (this will be hidden from user)
             - For BEHAVIOR 1, suggest realistic alternatives using valid values below when relevant
             - For BEHAVIOR 2, clearly explain what assumption was made
-            - CRITICAL: If assumptions list contains any date-related assumption, you MUST use BEHAVIOR 2 and generate a message about it
+            - CRITICAL: If assumptions list contains ANY assumption (date, status, etc.), you MUST use BEHAVIOR 2 (or combine with BEHAVIOR 1 if results are empty)
             - Do NOT return "NO_ASSUMPTION_MADE" if there are any assumptions in the assumptions list
+            - When combining BEHAVIOR 1 and BEHAVIOR 2 (assumption + no results): Mention the assumption first, then the suggestion
             
             VALID DATA EXAMPLES (for reference when suggesting alternatives):
             - Valid STATUSES: CREATED, COURIER_STORED, CUSTOMER_STORED, DELIVERED, OPERATOR_COLLECTED, EXPIRED

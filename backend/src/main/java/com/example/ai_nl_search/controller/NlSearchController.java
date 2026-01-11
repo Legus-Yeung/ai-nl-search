@@ -39,6 +39,26 @@ public class NlSearchController {
         this.orderSearchService = orderSearchService;
     }
 
+    @GetMapping("/orders")
+    public ResponseEntity<?> getAllOrders() {
+        try {
+            OrderFilter emptyFilter = new OrderFilter();
+            List<Map<String, Object>> results = orderSearchService.search(emptyFilter);
+            NlSearchResponse response = new NlSearchResponse();
+            response.setFilters(emptyFilter);
+            response.setResults(results);
+            response.setWarnings(new ArrayList<>());
+            response.setFollowUp(null);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.err.println("Error fetching all orders: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("message", "An error occurred while fetching orders. Please try again."));
+        }
+    }
+
     @PostMapping("/nl-search")
     public ResponseEntity<?> nlSearch(@RequestBody NlSearchRequest request) {
         if (request.getQuery() == null || request.getQuery().trim().isEmpty()) {
@@ -105,6 +125,18 @@ public class NlSearchController {
     
     private List<String> validateAndSanitizeFilter(OrderFilter filter, List<String> warnings, String originalQuery) {
         List<String> assumptions = new ArrayList<>();
+        String queryLower = originalQuery.toLowerCase();
+        if (queryLower.contains("shipped") && filter.getExcludeStatus() != null) {
+            List<String> excludedStatuses = filter.getExcludeStatus();
+            if (excludedStatuses.contains("CREATED") && 
+                excludedStatuses.contains("COURIER_STORED") && 
+                excludedStatuses.contains("CUSTOMER_STORED") && 
+                excludedStatuses.contains("OPERATOR_COLLECTED") && 
+                excludedStatuses.contains("EXPIRED") &&
+                !excludedStatuses.contains("DELIVERED")) {
+                assumptions.add("Interpreted 'shipped' as status DELIVERED. Valid statuses are: CREATED, COURIER_STORED, CUSTOMER_STORED, DELIVERED, OPERATOR_COLLECTED, EXPIRED");
+            }
+        }
         
         if (filter.getExcludeStatus() != null) {
             List<String> invalidStatuses = new ArrayList<>();
@@ -204,7 +236,6 @@ public class NlSearchController {
                 filter.setDateField("CREATED");
             }
             
-            String queryLower = originalQuery.toLowerCase();
             boolean userSpecifiedDateField = queryLower.contains("created") || 
                                             queryLower.contains("creation") ||
                                             queryLower.contains("stored") ||

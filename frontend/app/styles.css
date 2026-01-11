@@ -31,6 +31,15 @@ button:hover {
   background-color: #0056b3;
 }
 
+button.show-all-btn {
+  background-color: #28a745;
+  margin-left: 0;
+}
+
+button.show-all-btn:hover {
+  background-color: #218838;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

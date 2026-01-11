@@ -9,7 +9,11 @@
 </head>
 <body ng-controller="SearchController">
 
-  <h2>My Orders</h2>
+  <h2>My Orders</h2> 
+
+  <div style="margin: 15px 0;">
+    <button class="show-all-btn" ng-click="loadAllOrders()">Show All Orders</button>
+  </div>
 
   <input
     type="text"
@@ -27,6 +31,9 @@
 
   <p ng-if="lastSearchQuery && !loading" style="font-size: 16px; color: #555; margin-top: 15px;">
     Search result for "<strong>{{ lastSearchQuery }}</strong>"
+  </p>
+  <p ng-if="!lastSearchQuery && !loading && results.length > 0" style="font-size: 16px; color: #555; margin-top: 15px;">
+    Showing all orders
   </p>
 
   <div ng-if="followUp && followUp !== 'NO_ASSUMPTION_MADE'" style="background-color: #d1ecf1; border: 1px solid #0c5460; padding: 12px; margin: 15px 0; border-radius: 4px; color: #0c5460;">
@@ -54,8 +61,8 @@
     </div>
   </div>
 
-  <h3 ng-if="results.length">Results ({{ results.length }})</h3>
-  <div ng-if="results.length" style="overflow-x: auto;">
+  <h3 ng-if="results.length || (!loading && !lastSearchQuery)">All Orders <span ng-if="results.length">({{ results.length }})</span></h3>
+  <div ng-if="results.length > 0" style="overflow-x: auto;">
     <table border="1" style="min-width: 100%;">
       <thead>
         <tr>
@@ -100,6 +107,10 @@
         </tr>
       </tbody>
     </table>
+  </div>
+
+  <div ng-if="!loading && results.length === 0 && !error" style="margin-top: 20px; padding: 20px; text-align: center; color: #6c757d;">
+    <p>No orders found.</p>
   </div>
 
   <script src="app.js"></script>

@@ -10,6 +10,34 @@ app.controller("SearchController", function ($scope, $http) {
   $scope.warnings = [];
   $scope.followUp = null;
 
+  $scope.loadAllOrders = function() {
+    $scope.loading = true;
+    $scope.error = null;
+    $scope.warnings = [];
+    $scope.followUp = null;
+    $scope.lastSearchQuery = "";
+
+    $http.get("/api/orders").then(function (response) {
+      $scope.results = response.data.results || [];
+      $scope.filters = response.data.filters;
+      $scope.warnings = response.data.warnings || [];
+      $scope.followUp = response.data.followUp || null;
+    }).catch(function (error) {
+      var errorMessage = "Failed to load orders";
+      if (error.data && error.data.message) {
+        errorMessage = error.data.message;
+      } else if (error.statusText) {
+        errorMessage = error.statusText;
+      }
+      $scope.error = errorMessage;
+      console.error(error);
+    }).finally(function () {
+      $scope.loading = false;
+    });
+  };
+
+  $scope.loadAllOrders();
+
   $scope.search = function () {
     if (!$scope.query || !$scope.query.trim()) {
       $scope.error = "Please enter a search query";
