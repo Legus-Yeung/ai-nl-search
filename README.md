@@ -6,6 +6,129 @@ Natural language search application for orders using AWS Bedrock.
 
 **Architecture**: Three-tier system with frontend (compatible with Angular 1.8.3), backend (Spring Boot), and database (MySQL) plus Dockerization and AWS Bedrock integration.
 
+### System Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "User Browser"
+        User[User]
+    end
+    
+    subgraph "Docker Network: app-network"
+        subgraph "Frontend Container"
+            Nginx[Nginx<br/>Port 80]
+            Angular[AngularJS 1.8.3<br/>Static Files]
+        end
+        
+        subgraph "Backend Container"
+            Controller[NlSearchController<br/>Spring Boot REST API]
+            BedrockService[BedrockNlService<br/>NL Interpretation]
+            OrderService[OrderSearchService<br/>SQL Generation]
+        end
+        
+        subgraph "Database Container"
+            MySQL[(MySQL Database<br/>Port 3306<br/>nl_search_demo)]
+        end
+    end
+    
+    subgraph "AWS Cloud"
+        Bedrock[AWS Bedrock<br/>Claude AI Model<br/>eu-central-1]
+    end
+    
+    User -->|HTTP GET/POST| Nginx
+    Nginx -->|Serves Static| Angular
+    Nginx -->|Proxy /api/*| Controller
+    Controller -->|1. NL Query| BedrockService
+    BedrockService -->|API Call| Bedrock
+    Bedrock -->|OrderFilter JSON| BedrockService
+    BedrockService -->|OrderFilter| Controller
+    Controller -->|2. OrderFilter| OrderService
+    OrderService -->|Parameterized SQL| MySQL
+    MySQL -->|Query Results| OrderService
+    OrderService -->|Results| Controller
+    Controller -->|3. Follow-up Query| BedrockService
+    BedrockService -->|API Call| Bedrock
+    Bedrock -->|Follow-up Message| BedrockService
+    BedrockService -->|Follow-up| Controller
+    Controller -->|Response JSON| Nginx
+    Nginx -->|HTTP Response| User
+```
+
+### Network Diagram
+
+```mermaid
+graph LR
+    subgraph "Host Machine"
+        Host[localhost]
+    end
+    
+    subgraph "Docker Bridge Network: app-network"
+        Frontend[frontend:80<br/>Nginx + AngularJS]
+        Backend[backend:8080<br/>Spring Boot]
+        DB[db:3306<br/>MySQL]
+    end
+    
+    subgraph "External Services"
+        AWS[AWS Bedrock API<br/>bedrock-runtime.eu-central-1.amazonaws.com<br/>HTTPS:443]
+    end
+    
+    Host -->|"http://localhost:80<br/>(Frontend UI)"| Frontend
+    Host -->|"http://localhost:8080<br/>(Direct API Access)"| Backend
+    Host -->|"mysql://localhost:3306<br/>(Database Access)"| DB
+    
+    Frontend -.->|"Proxy /api/*<br/>Internal Network"| Backend
+    Backend -->|"HTTPS API Calls<br/>AWS SDK"| AWS
+    Backend -->|"JDBC Connection<br/>Internal Network"| DB
+    
+    style Frontend fill:#e1f5ff
+    style Backend fill:#fff4e1
+    style DB fill:#e8f5e9
+    style AWS fill:#ffebee
+```
+
+### Component Interaction Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Nginx
+    participant Controller
+    participant BedrockService
+    participant Bedrock
+    participant OrderService
+    participant MySQL
+    
+    User->>Nginx: POST /api/nl-search<br/>{query: "delivered orders"}
+    Nginx->>Controller: Forward request
+    
+    Note over Controller,BedrockService: Step 1: NL Interpretation
+    Controller->>BedrockService: interpret(query)
+    BedrockService->>Bedrock: API Call with System Prompt
+    Bedrock-->>BedrockService: OrderFilter JSON
+    BedrockService-->>Controller: OrderFilter DTO
+    
+    Note over Controller: Step 2: Validation
+    Controller->>Controller: Validate & Sanitize<br/>(Whitelist Check)
+    
+    Note over Controller,MySQL: Step 3: SQL Execution
+    Controller->>OrderService: search(OrderFilter)
+    OrderService->>OrderService: Build Parameterized SQL
+    OrderService->>MySQL: Execute Query
+    MySQL-->>OrderService: Query Results
+    OrderService-->>Controller: List<Map<String, Object>>
+    
+    Note over Controller,Bedrock: Step 4: Follow-up Generation
+    Controller->>BedrockService: generateFollowUp(query, filter, results, assumptions)
+    BedrockService->>Bedrock: API Call
+    Bedrock-->>BedrockService: Follow-up Message
+    BedrockService-->>Controller: Follow-up String
+    
+    Note over Controller,User: Step 5: Response
+    Controller->>Controller: Build NlSearchResponse<br/>(filters, results, warnings, followUp)
+    Controller-->>Nginx: HTTP 200 + JSON
+    Nginx-->>User: Response
+```
+
 **API Flow**:
 1. `POST /api/nl-search` receives natural language query
 2. `BedrockNlService` converts NL → `OrderFilter` JSON via AWS Bedrock

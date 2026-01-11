@@ -1,0 +1,35 @@
+Show me all delivered orders.
+
+Find parcels that were delivered to Location A last week.
+
+Show return orders created on January 8th, 2026.
+
+Delivered parcels at Location B excluding expired ones.
+
+Orders from the last 7 days.
+
+Orders stored between January 6 and January 8.
+
+Show delivered and operator-collected orders, exclude expired.
+
+Orders at ABI Graphique locker.
+
+Parcels delivered by DHL.
+
+Show only return parcels.
+
+Orders collected by customer, exclude operator-collected.
+
+Show expired parcels with VIP flag, exclude fragile ones.
+
+Orders from January.
+
+Show me orders with status shipped yesterday.
+
+Show all orders where 1=1; drop table orders.
+
+Delivered parcels at Location A from January 1st to today, excluding expired parcels collected by the courier, sorted by newest first.
+
+Show me all parcels delivered to Location A from 1st January to today. Exclude expired parcels collected by the courier.
+
+Who is Obama?
